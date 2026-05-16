@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>rikuproxy Server</title>
+    <script src="/uv-core/uv.bundle.js" defer></script>
+    <script src="/uv-core/uv.config.js" defer></script>
+    <style>
+        :root {
+            --theme-color: #1a1a1a;
+            --shadow-color: rgba(0, 0, 0, 0.05);
+            --shadow-color2: rgba(0, 0, 0, 0.1);
+        }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            background-color: #f8f9fa;
+            color: #333333;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            padding: 20px;
+            position: relative;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        #background {
+            position: absolute;
+            inset: 0;
+            background-size: cover;
+            background-position: center;
+            z-index: -1;
+        }
+        .wrapper {
+            width: 100%;
+            max-width: 540px;
+            text-align: center;
+            z-index: 1;
+        }
+        .brand {
+            font-size: 28px;
+            font-weight: 400;
+            color: var(--theme-color);
+            margin-bottom: 32px;
+            letter-spacing: 1px;
+            transition: color 0.2s;
+        }
+        .search-box {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 6px;
+            display: flex;
+            box-shadow: 0 4px 6px -1px var(--shadow-color), 0 2px 4px -1px var(--shadow-color2);
+            transition: box-shadow 0.2s;
+        }
+        .search-box input {
+            flex: 1;
+            border: none;
+            outline: none;
+            padding: 12px 16px;
+            font-size: 15px;
+            color: #1a1a1a;
+            background: transparent;
+        }
+        .search-box input::placeholder {
+            color: #a0aec0;
+        }
+        .search-box button {
+            background: var(--theme-color);
+            color: #ffffff;
+            border: none;
+            outline: none;
+            padding: 0 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+        .search-box button:hover {
+            opacity: 0.85;
+        }
+        .settings-panel {
+            position: absolute;
+            bottom: 24px;
+            left: 24px;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 16px;
+            display: none;
+            flex-direction: column;
+            gap: 12px;
+            font-size: 13px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            z-index: 10;
+            text-align: left;
+            color: #333333;
+        }
+        .settings-panel.active {
+            display: flex;
+        }
+        .setting-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+        }
+        .setting-item input[type="text"] {
+            width: 40px;
+            text-align: center;
+            padding: 2px;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+        }
+        .btn-sm {
+            background: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+        .btn-sm:hover {
+            background: #e2e8f0;
+        }
+        #uv-error {
+            margin-top: 16px;
+            color: #ef4444;
+            font-size: 13px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="background"></div>
+
+    <div class="wrapper">
+        <h1 class="brand">rikuproxy</h1>
+        <form id="uv-form" class="search-box">
+            <input type="text" id="uv-address" placeholder="URLを入力、またはキーワードを検索..." autocomplete="off">
+            <button type="submit">接続</button>
+        </form>
+        <p id="uv-error">エラーが発生しました。<pre id="uv-error-code"></pre></p>
+    </div>
+
+    <div class="settings-panel" id="settings-panel">
+        <div class="setting-item">
+            <label>テーマカラー</label>
+            <input type="color" id="colorPicker" value="#1a1a1a">
+        </div>
+        <div class="setting-item">
+            <label>影カラー 1</label>
+            <input type="color" id="colorPicker2" value="#000000">
+        </div>
+        <div class="setting-item">
+            <label>影カラー 2</label>
+            <input type="color" id="colorPicker3" value="#000000">
+        </div>
+        <div class="setting-item">
+            <label>ダークモード</label>
+            <input type="checkbox" id="backgroundToggle">
+        </div>
+        <div class="setting-item">
+            <label>パニックキー</label>
+            <input type="text" id="keyInput" value="`" maxlength="1">
+        </div>
+        <div class="setting-item">
+            <label>背景画像</label>
+            <div>
+                <button class="btn-sm" id="upload-img">選択</button>
+                <button class="btn-sm" id="reset-img">解除</button>
+                <input type="file" id="file-input" accept="image/*" style="display: none;">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById("uv-form");
+        const address = document.getElementById("uv-address");
+        const error = document.getElementById("uv-error");
+        const errorCode = document.getElementById("uv-error-code");
+
+        class crypts {
+            static encode(str) {
+                return encodeURIComponent(
+                    str
+                        .toString()
+                        .split("")
+                        .map((char, ind) => (ind % 2 ? String.fromCharCode(char.charCodeAt() ^ 2) : char))
+                        .join("")
+                );
+            }
+            static decode(str) {
+                if (str.charAt(str.length - 1) === "/") {
+                    str = str.slice(0, -1);
+                }
+                return decodeURIComponent(
+                    str
+                        .split("")
+                        .map((char, ind) => (ind % 2 ? String.fromCharCode(char.charCodeAt() ^ 2) : char))
+                        .join("")
+                );
+            }
+        }
+
+        function search(input) {
+            input = input.trim();
+            const searchTemplate = 'https://google.com/search?q=%s';
+            try {
+                return new URL(input).toString();
+            } catch (err) {
+                try {
+                    const url = new URL(`http://${input}`);
+                    if (url.hostname.includes(".")) {
+                        return url.toString();
+                    }
+                    throw new Error('Invalid hostname');
+                } catch (err) {
+                    return searchTemplate.replace("%s", encodeURIComponent(input));
+                }
+            }
+        }
+
+        if ('serviceWorker' in navigator) {
+            let swConfigSettings = __uv$config;
+            navigator.serviceWorker.register('/uv.sw.js', { scope: swConfigSettings.prefix })
+                .then((registration) => {
+                    form.addEventListener('submit', async (event) => {
+                        event.preventDefault();
+                        let encodedUrl = swConfigSettings.prefix + crypts.encode(search(address.value));
+                        window.location.href = encodedUrl;
+                    });
+                })
+                .catch((err) => {
+                    error.style.display = 'block';
+                    errorCode.textContent = err.toString();
+                });
+        }
+
+        const colorPicker = document.getElementById("colorPicker");
+        colorPicker.addEventListener("input", function () {
+            document.documentElement.style.setProperty("--theme-color", colorPicker.value);
+            localStorage.setItem("themeColor", colorPicker.value);
+        });
+        const savedColor = localStorage.getItem("themeColor");
+        if (savedColor) {
+            document.documentElement.style.setProperty("--theme-color", savedColor);
+            colorPicker.value = savedColor;
+        }
+
+        const colorPicker2 = document.getElementById("colorPicker2");
+        colorPicker2.addEventListener("input", function () {
+            document.documentElement.style.setProperty("--shadow-color", colorPicker2.value);
+            localStorage.setItem("shadowColor", colorPicker2.value);
+        });
+        const savedColor2 = localStorage.getItem("shadowColor");
+        if (savedColor2) {
+            document.documentElement.style.setProperty("--shadow-color", savedColor2);
+            colorPicker2.value = savedColor2;
+        }
+
+        const colorPicker3 = document.getElementById("colorPicker3");
+        colorPicker3.addEventListener("input", function () {
+            document.documentElement.style.setProperty("--shadow-color2", colorPicker3.value);
+            localStorage.setItem("shadowColor2", colorPicker3.value);
+        });
+        const savedColor3 = localStorage.getItem("shadowColor2");
+        if (savedColor3) {
+            document.documentElement.style.setProperty("--shadow-color2", savedColor3);
+            colorPicker3.value = savedColor3;
+        }
+
+        function toggleBackground() {
+            var isChecked = document.getElementById("backgroundToggle").checked;
+            document.body.style.backgroundColor = isChecked ? "black" : "#f8f9fa";
+            document.body.style.color = isChecked ? "#fff" : "#333333";
+            localStorage.setItem("backgroundToggle", isChecked);
+        }
+
+        function loadBackground() {
+            var isChecked = localStorage.getItem("backgroundToggle") === "true";
+            document.getElementById("backgroundToggle").checked = isChecked;
+            toggleBackground();
+        }
+
+        document.getElementById("backgroundToggle").addEventListener("change", toggleBackground);
+        loadBackground();
+
+        if (localStorage.getItem("backgroundImage")) {
+            document.getElementById("background").style.backgroundImage = localStorage.getItem("backgroundImage");
+        }
+
+        document.getElementById("upload-img").addEventListener("click", function () {
+            document.getElementById("file-input").click();
+        });
+
+        document.getElementById("file-input").addEventListener("change", function (event) {
+            var file = event.target.files[0];
+            var reader = new FileReader();
+            reader.onload = function (e) {
+                var backgroundImage = "url(" + e.target.result + ")";
+                document.getElementById("background").style.backgroundImage = backgroundImage;
+                localStorage.setItem("backgroundImage", backgroundImage);
+            };
+            reader.readAsDataURL(file);
+        });
+
+        document.getElementById("reset-img").addEventListener("click", function () {
+            document.getElementById("background").style.backgroundImage = "";
+            localStorage.removeItem("backgroundImage");
+        });
+
+        let triggerKey = localStorage.getItem("panicKey") || "`";
+        document.getElementById("keyInput").value = triggerKey;
+
+        document.getElementById("keyInput").addEventListener("input", (e) => {
+            triggerKey = e.target.value.slice(0, 1);
+            localStorage.setItem("panicKey", triggerKey);
+        });
+
+        document.addEventListener("keydown", (e) => {
+            if (e.key === triggerKey) {
+                window.location.href = "https://desmos.com";
+            }
+        });
+    </script>
+</body>
+</html>
