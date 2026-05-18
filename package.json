@@ -1,10 +1,13 @@
 {
   "name": "rikuproxy",
   "version": "1.0.0",
-  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
   "dependencies": {
-    "@tomphttp/bare-server-node": "^2.0.1",
-    "cors": "^2.8.5",
-    "express": "^4.19.2"
+    "@tomphttp/bare-server-node": "latest",
+    "express": "latest",
+    "node-fetch": "latest"
   }
 }
