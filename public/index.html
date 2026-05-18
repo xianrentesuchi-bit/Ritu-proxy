@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rikuproxy</title>
+
+  <style>
+    body {
+      background: #0f172a;
+      color: white;
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    .container {
+      width: 500px;
+      text-align: center;
+    }
+
+    input {
+      width: 100%;
+      padding: 14px;
+      border-radius: 10px;
+      border: none;
+      outline: none;
+      margin-bottom: 15px;
+      font-size: 16px;
+    }
+
+    button {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      background: #2563eb;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #1d4ed8;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>Rikuproxy</h1>
+
+  <form id="uv-form">
+    <input
+      id="uv-address"
+      type="text"
+      placeholder="https://google.com"
+      autocomplete="off"
+    >
+
+    <button type="submit">Open</button>
+  </form>
+</div>
+
+<script src="/uv/uv.bundle.js"></script>
+<script src="/uv/uv.config.js"></script>
+
+<script>
+const form = document.getElementById('uv-form');
+const address = document.getElementById('uv-address');
+
+async function registerSW() {
+  if ('serviceWorker' in navigator) {
+    await navigator.serviceWorker.register('/uv/sw.js', {
+      scope: '/uv/'
+    });
+  }
+}
+
+registerSW();
+
+form.addEventListener('submit', (event) => {
+  event.preventDefault();
+
+  let value = address.value.trim();
+
+  if (!value.startsWith('http://') && !value.startsWith('https://')) {
+    value = 'https://' + value;
+  }
+
+  location.href =
+    __uv$config.prefix +
+    __uv$config.encodeUrl(value);
+});
+</script>
+
+</body>
+</html>
