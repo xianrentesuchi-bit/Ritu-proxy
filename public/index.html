@@ -31,6 +31,7 @@
       outline: none;
       margin-bottom: 15px;
       font-size: 16px;
+      box-sizing: border-box;
     }
 
     button {
@@ -47,6 +48,17 @@
     button:hover {
       background: #1d4ed8;
     }
+
+    button:disabled {
+      background: #475569;
+      cursor: not-allowed;
+    }
+
+    #status {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #94a3b8;
+    }
   </style>
 </head>
 <body>
@@ -58,43 +70,90 @@
     <input
       id="uv-address"
       type="text"
-      placeholder="https://google.com"
+      placeholder="URLを入力、または検索ワード"
       autocomplete="off"
     >
 
-    <button type="submit">Open</button>
+    <button type="submit" id="uv-btn" disabled>Loading Proxy...</button>
   </form>
+  <div id="status">Proxyを準備中...</div>
 </div>
 
+<!-- 必要なUVスクリプトの読み込み -->
 <script src="/uv/uv.bundle.js"></script>
 <script src="/uv/uv.config.js"></script>
 
 <script>
 const form = document.getElementById('uv-form');
 const address = document.getElementById('uv-address');
+const btn = document.getElementById('uv-btn');
+const statusDiv = document.getElementById('status');
 
+// Service Workerを確実に登録・有効化する関数
 async function registerSW() {
   if ('serviceWorker' in navigator) {
-    await navigator.serviceWorker.register('/uv/sw.js', {
-      scope: '/uv/'
-    });
+    try {
+      // uv.config.js に定義されているパス、またはデフォルトの '/uv/sw.js' を使用
+      const swPath = typeof __uv$config !== 'undefined' ? (__uv$config.sw || '/uv/sw.js') : '/uv/sw.js';
+      const scopePath = typeof __uv$config !== 'undefined' ? (__uv$config.prefix || '/uv/service/') : '/uv/service/';
+
+      const registration = await navigator.serviceWorker.register(swPath, {
+        scope: scopePath
+      });
+      
+      // Service Workerがアクティブになるのを待つ
+      if (registration.installing) {
+        statusDiv.innerText = "Proxyをインストール中...";
+      }
+      
+      // 完全にコントロール下に置かれるまで待機
+      await navigator.serviceWorker.ready;
+      
+      // ボタンとステータスを有効化
+      btn.disabled = false;
+      btn.innerText = "Open";
+      statusDiv.innerText = "準備完了";
+    } catch (err) {
+      console.error('Service Workerの登録に失敗しました:', err);
+      statusDiv.style.color = '#ef4444';
+      statusDiv.innerText = "エラー: Proxyの起動に失敗しました。";
+    }
+  } else {
+    statusDiv.style.color = '#ef4444';
+    statusDiv.innerText = "お使いのブラウザはService Workerに対応していません。";
   }
 }
 
+// ページ読み込み時にSWを起動
 registerSW();
 
 form.addEventListener('submit', (event) => {
   event.preventDefault();
 
-  let value = address.value.trim();
-
-  if (!value.startsWith('http://') && !value.startsWith('https://')) {
-    value = 'https://' + value;
+  // __uv$config が読み込めていない場合は処理を中断
+  if (typeof __uv$config === 'undefined') {
+    alert('Ultramarineの構成ファイル(uv.config.js)が読み込まれていません。');
+    return;
   }
 
-  location.href =
-    __uv$config.prefix +
-    __uv$config.encodeUrl(value);
+  let value = address.value.trim();
+  if (!value) return;
+
+  // 簡易的なURL判定（ドメインの形式を含んでいるか、またはhttpから始まっているか）
+  const urlPattern = /^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/i;
+
+  if (urlPattern.test(value)) {
+    // URLの形式の場合
+    if (!value.startsWith('http://') && !value.startsWith('https://')) {
+      value = 'https://' + value;
+    }
+  } else {
+    // 単なる検索ワードの場合はGoogle検索にフォールバック
+    value = 'https://www.google.com/search?q=' + encodeURIComponent(value);
+  }
+
+  // 遷移処理
+  location.href = __uv$config.prefix + __uv$config.encodeUrl(value);
 });
 </script>
 
